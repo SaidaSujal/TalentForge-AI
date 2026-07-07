@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: talentforge-ai
+    runtime: python
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
+      - key: CACHE_TTL_HOURS
+        value: "24"
+      - key: NVIDIA_SMALL_MODEL
+        value: meta/llama-3.1-8b-instruct
+      - key: NVIDIA_LARGE_MODEL
+        value: meta/llama-3.1-70b-instruct
+      - key: NVIDIA_ADVANCED_MODEL
+        value: nvidia/llama-3.3-nemotron-super-49b-v1.5
+      - key: NVIDIA_EMBEDDING_MODEL
+        value: nvidia/nv-embed-v1

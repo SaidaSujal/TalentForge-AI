@@ -1,0 +1,81 @@
+# ─── Secrets & Environment ────────────────────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.staging
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.so
+
+# ─── Virtual Environments ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ─── Build & Distribution ─────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+
+# ─── Uploads / Exports / Backups (keep placeholder only) ──────────────────────
+uploads/*
+!uploads/.gitkeep
+exports/*
+!exports/.gitkeep
+backups/*
+!backups/.gitkeep
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+logs/*
+!logs/.gitkeep
+*.log
+
+# ─── Caches ───────────────────────────────────────────────────────────────────
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.cache
+
+# ─── Database Files ───────────────────────────────────────────────────────────
+*.sqlite3
+*.db
+
+# ─── IDE & OS ─────────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ─── Type Checking ────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# ─── Static Assets (generated) ────────────────────────────────────────────────
+node_modules/
+*.min.css
+*.min.js

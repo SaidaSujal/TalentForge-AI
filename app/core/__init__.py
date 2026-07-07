@@ -1,0 +1,3 @@
+"""
+TalentForge AI — Core Package
+"""
