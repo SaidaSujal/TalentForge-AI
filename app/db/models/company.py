@@ -14,11 +14,24 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from app.db.models.user import User
-    from app.db.models.employee import Employee
+    from app.db.models.ai_cache import AICache
+    from app.db.models.ai_history import AIHistory
+    from app.db.models.attrition_assessment import AttritionAssessment
+    from app.db.models.audit_log import AuditLog
     from app.db.models.candidate import Candidate
-    from app.db.models.resume import Resume
+    from app.db.models.employee import Employee
+    from app.db.models.export_job import ExportJob
+    from app.db.models.interview_kit import InterviewKit
     from app.db.models.job_description import JobDescription
+    from app.db.models.learning_plan import LearningPlan
+    from app.db.models.onboarding_plan import OnboardingPlan
+    from app.db.models.onboarding_task import OnboardingTask
+    from app.db.models.performance_review import PerformanceReview
+    from app.db.models.policy_document import PolicyDocument
+    from app.db.models.resume import Resume
+    from app.db.models.retention_strategy import RetentionStrategy
+    from app.db.models.training_record import TrainingRecord
+    from app.db.models.user import User
 
 
 class Company(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -83,6 +96,47 @@ class Company(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         "JobDescription",
         back_populates="company",
         cascade="all, delete-orphan",
+    )
+    policy_documents: Mapped[list[PolicyDocument]] = relationship(
+        "PolicyDocument",
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+    onboarding_plans: Mapped[list[OnboardingPlan]] = relationship(
+        "OnboardingPlan", back_populates="company", cascade="all, delete-orphan"
+    )
+    onboarding_tasks: Mapped[list[OnboardingTask]] = relationship(
+        "OnboardingTask", back_populates="company", cascade="all, delete-orphan"
+    )
+    performance_reviews: Mapped[list[PerformanceReview]] = relationship(
+        "PerformanceReview", back_populates="company", cascade="all, delete-orphan"
+    )
+    attrition_assessments: Mapped[list[AttritionAssessment]] = relationship(
+        "AttritionAssessment", back_populates="company", cascade="all, delete-orphan"
+    )
+    retention_strategies: Mapped[list[RetentionStrategy]] = relationship(
+        "RetentionStrategy", back_populates="company", cascade="all, delete-orphan"
+    )
+    learning_plans: Mapped[list[LearningPlan]] = relationship(
+        "LearningPlan", back_populates="company", cascade="all, delete-orphan"
+    )
+    training_records: Mapped[list[TrainingRecord]] = relationship(
+        "TrainingRecord", back_populates="company", cascade="all, delete-orphan"
+    )
+    interview_kits: Mapped[list[InterviewKit]] = relationship(
+        "InterviewKit", back_populates="company", cascade="all, delete-orphan"
+    )
+    ai_caches: Mapped[list[AICache]] = relationship(
+        "AICache", back_populates="company", passive_deletes=True
+    )
+    ai_histories: Mapped[list[AIHistory]] = relationship(
+        "AIHistory", back_populates="company", passive_deletes=True
+    )
+    audit_logs: Mapped[list[AuditLog]] = relationship(
+        "AuditLog", back_populates="company", passive_deletes=True
+    )
+    export_jobs: Mapped[list[ExportJob]] = relationship(
+        "ExportJob", back_populates="company", passive_deletes=True
     )
 
     def __repr__(self) -> str:

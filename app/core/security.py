@@ -16,11 +16,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
-from uuid import UUID
 
 from fastapi import Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from passlib.context import CryptContext
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp

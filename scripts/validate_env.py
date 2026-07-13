@@ -21,6 +21,7 @@ from typing import List, Tuple
 # Load .env file if it exists
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     print("[WARN] python-dotenv not installed — reading from system environment only")
@@ -67,10 +68,15 @@ def check_env() -> bool:
         if not value:
             errors.append(f"  ✗ {var_name} — MISSING ({description})")
         elif value in PLACEHOLDER_VALUES:
-            errors.append(f"  ✗ {var_name} — PLACEHOLDER VALUE (replace with real value)")
+            errors.append(
+                f"  ✗ {var_name} — PLACEHOLDER VALUE (replace with real value)"
+            )
         else:
             # Mask sensitive values in output
-            if any(secret in var_name.lower() for secret in ("key", "password", "secret", "url")):
+            if any(
+                secret in var_name.lower()
+                for secret in ("key", "password", "secret", "url")
+            ):
                 display = value[:6] + "..." + value[-4:] if len(value) > 12 else "***"
             else:
                 display = value
@@ -81,11 +87,15 @@ def check_env() -> bool:
     if app_env == "production":
         secret_key = os.environ.get("SECRET_KEY", "")
         if len(secret_key) < 32:
-            warnings.append("  ⚠ SECRET_KEY should be at least 64 characters in production")
+            warnings.append(
+                "  ⚠ SECRET_KEY should be at least 64 characters in production"
+            )
 
     db_url = os.environ.get("DATABASE_URL", "")
     if db_url and "sslmode=require" not in db_url:
-        warnings.append("  ⚠ DATABASE_URL should include ?sslmode=require for Neon PostgreSQL")
+        warnings.append(
+            "  ⚠ DATABASE_URL should include ?sslmode=require for Neon PostgreSQL"
+        )
 
     # Print results
     print()
@@ -100,7 +110,9 @@ def check_env() -> bool:
         for e in errors:
             print(e)
         print()
-        print(f"✗ {len(errors)} check(s) failed. Fix the above errors before starting the application.")
+        print(
+            f"✗ {len(errors)} check(s) failed. Fix the above errors before starting the application."
+        )
         return False
 
     print(f"✓ All {len(REQUIRED_VARS)} environment variable checks passed.")

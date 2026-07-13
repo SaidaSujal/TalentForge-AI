@@ -18,8 +18,9 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers
 revision: str = "0002_create_foundation_tables"
@@ -34,13 +35,51 @@ def upgrade() -> None:
     # ── companies ─────────────────────────────────────────────────────────────
     op.create_table(
         "companies",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()"), nullable=False, comment="Universally unique record identifier"),
-        sa.Column("name", sa.String(255), nullable=False, comment="Company display name"),
-        sa.Column("slug", sa.String(100), nullable=False, comment="URL-safe company identifier"),
-        sa.Column("settings_json", sa.Text, nullable=True, server_default="{}", comment="JSON-encoded company-level settings"),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true"), comment="Soft-delete flag"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, comment="Record creation timestamp (UTC)"),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, comment="Record last-update timestamp (UTC)"),
+        sa.Column(
+            "id",
+            UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+            comment="Universally unique record identifier",
+        ),
+        sa.Column(
+            "name", sa.String(255), nullable=False, comment="Company display name"
+        ),
+        sa.Column(
+            "slug",
+            sa.String(100),
+            nullable=False,
+            comment="URL-safe company identifier",
+        ),
+        sa.Column(
+            "settings_json",
+            sa.Text,
+            nullable=True,
+            server_default="{}",
+            comment="JSON-encoded company-level settings",
+        ),
+        sa.Column(
+            "is_active",
+            sa.Boolean,
+            nullable=False,
+            server_default=sa.text("true"),
+            comment="Soft-delete flag",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="Record creation timestamp (UTC)",
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="Record last-update timestamp (UTC)",
+        ),
     )
     op.create_unique_constraint("uq_companies_slug", "companies", ["slug"])
     op.create_index("ix_companies_slug", "companies", ["slug"])
@@ -49,12 +88,40 @@ def upgrade() -> None:
     # ── app_settings ──────────────────────────────────────────────────────────
     op.create_table(
         "app_settings",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()"), nullable=False, comment="Universally unique record identifier"),
-        sa.Column("key", sa.String(255), nullable=False, comment="Setting key (unique)"),
-        sa.Column("value", sa.Text, nullable=True, comment="Setting value (stored as text)"),
-        sa.Column("description", sa.String(500), nullable=True, comment="Human-readable description of this setting"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, comment="Record creation timestamp (UTC)"),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, comment="Record last-update timestamp (UTC)"),
+        sa.Column(
+            "id",
+            UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+            comment="Universally unique record identifier",
+        ),
+        sa.Column(
+            "key", sa.String(255), nullable=False, comment="Setting key (unique)"
+        ),
+        sa.Column(
+            "value", sa.Text, nullable=True, comment="Setting value (stored as text)"
+        ),
+        sa.Column(
+            "description",
+            sa.String(500),
+            nullable=True,
+            comment="Human-readable description of this setting",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="Record creation timestamp (UTC)",
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="Record last-update timestamp (UTC)",
+        ),
     )
     op.create_unique_constraint("uq_app_settings_key", "app_settings", ["key"])
     op.create_index("ix_app_settings_key", "app_settings", ["key"])

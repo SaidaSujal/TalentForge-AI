@@ -19,14 +19,16 @@ from logging.config import fileConfig
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from alembic import context
 
 # ─── Alembic Config Object ────────────────────────────────────────────────────
 config = context.config
@@ -35,13 +37,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+import app.db.models  # noqa: E402, F401 — side-effect import to register all models
+
 # ─── Import Models ────────────────────────────────────────────────────────────
 # IMPORTANT: importing app.db.models triggers all model imports,
 # making Base.metadata aware of every table for auto-generation.
 from app.db.base import Base  # noqa: E402
-import app.db.models  # noqa: E402, F401 — side-effect import to register all models
 
 target_metadata = Base.metadata
+
 
 # ─── Database URL ─────────────────────────────────────────────────────────────
 # Read from environment — NEVER hardcode credentials here.

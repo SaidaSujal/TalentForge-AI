@@ -21,7 +21,6 @@ Usage in route files:
 from __future__ import annotations
 
 import logging
-from typing import Callable
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -42,5 +41,5 @@ limiter = Limiter(
 # ─── Convenience Limit Strings ────────────────────────────────────────────────
 # Use these in @limiter.limit() decorators to avoid magic strings.
 public_limit: str = settings.rate_limit_public  # e.g. "20/minute"
-ai_limit: str = settings.rate_limit_ai          # e.g. "10/minute"
-auth_limit: str = settings.rate_limit_auth      # e.g. "5/minute"
+ai_limit: str = settings.rate_limit_ai  # e.g. "10/minute"
+auth_limit: str = settings.rate_limit_auth  # e.g. "5/minute"

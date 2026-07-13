@@ -1,33 +1,24 @@
 """
-TalentForge AI — AI Response Cache Skeleton (Phase 1)
+TalentForge AI — AI Response Cache System (Phase 2.6)
 ======================================================
 The cache system is the primary cost-saving mechanism.
-Before every LLM call the service must check the cache.
+Before every LLM call, the service must check the cache.
 A cache hit avoids the NVIDIA API call entirely.
-
-Cache key: SHA-256 hash of (prompt_text + model_id)
-TTL: controlled by CACHE_TTL_HOURS env var (default 24 h)
-Storage: ai_cache database table (added in Phase 2)
-
-Phase 1: This file defines the cache interface as a skeleton.
-         The actual database-backed implementation is wired in Phase 2.
-Phase 3: Full cache read/write is integrated into the AI call pipeline.
-
-Rules (from AGENT.md §11):
-  - Check cache BEFORE every LLM call.
-  - Cache every repeatable AI output.
-  - Cache TTL is configurable via CACHE_TTL_HOURS.
-  - Dashboard must show "API calls saved by cache" as a KPI.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
+from app.db.repositories.ai_cache import AICacheRepository
+from app.db.repositories.ai_history import AIHistoryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +27,6 @@ def build_cache_key(prompt: str, model_id: str) -> str:
     """
     Generate a deterministic SHA-256 cache key from the prompt and model ID.
     The key is safe to store in the database and compare.
-
-    Args:
-        prompt: The complete prompt text (after all preprocessing).
-        model_id: The resolved NVIDIA model ID string.
-
-    Returns:
-        A 64-character hex string (SHA-256 digest).
     """
     raw = f"{model_id}::{prompt}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -55,57 +39,98 @@ def get_cache_ttl() -> timedelta:
 
 class AICache:
     """
-    Skeleton cache interface.
-    Phase 2: Replace stub methods with real database-backed implementations.
+    Database-backed cache utilities using repository injection.
+    Phase 2.6: Replace stub methods with real database-backed implementations.
     Phase 3: Integrate into the AI call pipeline (check → call → store).
     """
 
-    async def get(self, cache_key: str) -> Optional[str]:
+    async def get(
+        self,
+        cache_key: str,
+        db: Optional[AsyncSession] = None,
+        company_id: Optional[uuid.UUID] = None,
+    ) -> Optional[str]:
         """
         Look up a cache entry by key.
-
-        Phase 1 stub — always returns None (cache miss).
-        Phase 2: Query the ai_cache table WHERE key = cache_key AND expires_at > now().
-
-        Args:
-            cache_key: SHA-256 hex digest from build_cache_key().
-
-        Returns:
-            The cached response JSON string if found and not expired, else None.
+        If db or company_id are omitted, returns None (acting as skeleton stub).
         """
-        # TODO (Phase 2): Implement database lookup
-        logger.debug("Cache lookup (stub) — cache miss", extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}})
+        if db is None or company_id is None:
+            logger.debug(
+                "Cache lookup (stub) — cache miss (missing db or company_id)",
+                extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}},
+            )
+            return None
+
+        repo = AICacheRepository(db, company_id)
+        cache_entry = await repo.get_active_cache(cache_key)
+        if cache_entry:
+            logger.debug(
+                "Cache lookup — hit",
+                extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}},
+            )
+            return cache_entry.response_text
+
+        logger.debug(
+            "Cache lookup — miss",
+            extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}},
+        )
         return None
 
-    async def set(self, cache_key: str, response: str) -> None:
+    async def set(
+        self,
+        cache_key: str,
+        response: str,
+        db: Optional[AsyncSession] = None,
+        company_id: Optional[uuid.UUID] = None,
+        prompt_hash: Optional[str] = None,
+        task_type: Optional[str] = None,
+        provider: Optional[str] = None,
+        model_used: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
+        token_count: Optional[int] = None,
+    ) -> None:
         """
         Store an AI response in the cache.
-
-        Phase 1 stub — no-op.
-        Phase 2: INSERT INTO ai_cache (key, response, expires_at) VALUES (...).
-
-        Args:
-            cache_key: SHA-256 hex digest from build_cache_key().
-            response: The AI response as a JSON string.
+        If db or company_id are omitted, acts as a no-op skeleton.
         """
-        # TODO (Phase 2): Implement database store
-        logger.debug("Cache store (stub) — skipped", extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}})
+        if db is None or company_id is None:
+            logger.debug(
+                "Cache store (stub) — skipped (missing db or company_id)",
+                extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}},
+            )
+            return
 
-    async def get_hit_count(self, company_id: str) -> int:
+        if not expires_at:
+            expires_at = datetime.now(timezone.utc) + get_cache_ttl()
+
+        repo = AICacheRepository(db, company_id)
+        await repo.upsert_cache(
+            cache_key=cache_key,
+            prompt_hash=prompt_hash or "default_prompt_hash",
+            task_type=task_type or "default_task",
+            provider=provider or "nvidia",
+            model_used=model_used or "meta/llama-3.1-8b-instruct",
+            response_text=response,
+            expires_at=expires_at,
+            token_count=token_count,
+        )
+        logger.debug(
+            "Cache store — saved",
+            extra={"extra_fields": {"cache_key": cache_key[:8] + "..."}},
+        )
+
+    async def get_hit_count(
+        self, company_id: str, db: Optional[AsyncSession] = None
+    ) -> int:
         """
         Return the number of cache hits for a company (for dashboard KPI).
-
-        Phase 1 stub — returns 0.
-        Phase 2: SELECT COUNT(*) FROM ai_history WHERE company_id=... AND cache_hit=true.
-
-        Args:
-            company_id: UUID string of the tenant company.
-
-        Returns:
-            Integer count of cache hits.
+        If db is omitted, returns 0.
         """
-        # TODO (Phase 2): Implement count query
-        return 0
+        if db is None:
+            return 0
+
+        repo = AIHistoryRepository(db, uuid.UUID(company_id))
+        return await repo.count_cache_hits()
 
 
 # Module-level singleton used by service layer

@@ -154,7 +154,9 @@ class JobDescription(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     # Relationships
-    company: Mapped[Company] = relationship("Company", back_populates="job_descriptions")
+    company: Mapped[Company] = relationship(
+        "Company", back_populates="job_descriptions"
+    )
 
     def __repr__(self) -> str:
         return f"<JobDescription id={self.id} title={self.title!r} department={self.department!r}>"

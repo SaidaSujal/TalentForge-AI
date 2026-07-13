@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 """
 TalentForge AI — SQLAlchemy Models (Phase 1 Foundation)
 =========================================================
@@ -22,13 +23,37 @@ from __future__ import annotations
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin  # noqa: F401
 
 # Import modular models — Alembic autodiscovery requires these to be imported here
-from app.db.models import (  # noqa: F401
-    Company,
-    User,
+from app.db.models import ApprovalStatus  # noqa: F401
+from app.db.models import (
+    AICache,
+    AIHistory,
     AppSettings,
-    Employee,
+    AttritionAssessment,
+    AuditLog,
     Candidate,
-    Resume,
+    Company,
+    Employee,
+    ExportJob,
+    ExportStatus,
+    ExportType,
+    InterviewKit,
     JobDescription,
+    LearningPlan,
+    OnboardingPlan,
+    OnboardingStatus,
+    OnboardingTask,
+    OnboardingTaskCategory,
+    PerformanceReview,
+    PolicyChunk,
+    PolicyDocument,
+    PolicyDocumentStatus,
+    Resume,
+    RetentionStrategy,
+    RetentionStrategyStatus,
+    ReviewStatus,
+    RiskLevel,
+    TaskStatus,
+    TrainingRecord,
+    TrainingStatus,
+    User,
 )
-

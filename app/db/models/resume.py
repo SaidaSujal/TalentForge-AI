@@ -30,7 +30,9 @@ class Resume(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("candidate_id", name="uq_resumes_candidate"),
-        Index("ix_resumes_company_candidate", "company_id", "candidate_id", unique=True),
+        Index(
+            "ix_resumes_company_candidate", "company_id", "candidate_id", unique=True
+        ),
         Index("ix_resumes_company_hash", "company_id", "resume_hash"),
     )
 

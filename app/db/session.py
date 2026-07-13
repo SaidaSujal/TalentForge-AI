@@ -42,11 +42,11 @@ if "sslmode=" not in settings.database_url:
 
 engine: AsyncEngine = create_async_engine(
     settings.database_url,
-    echo=settings.is_development,   # SQL echo only in dev
-    pool_size=5,                    # Neon free tier: max ~10 concurrent connections
+    echo=settings.is_development,  # SQL echo only in dev
+    pool_size=5,  # Neon free tier: max ~10 concurrent connections
     max_overflow=10,
-    pool_pre_ping=True,             # Detect stale connections before use
-    pool_recycle=1800,              # Recycle connections every 30 min (Neon idle timeout)
+    pool_pre_ping=True,  # Detect stale connections before use
+    pool_recycle=1800,  # Recycle connections every 30 min (Neon idle timeout)
     connect_args=connect_args,
 )
 

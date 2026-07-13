@@ -145,7 +145,10 @@ class ModelRouter:
         Return a human-readable map of task → model ID.
         Useful for the admin /api/v1/ai-usage endpoint.
         """
-        return {task: _ALIAS_TO_MODEL_ID[alias].value for task, alias in ROUTING_TABLE.items()}
+        return {
+            task: _ALIAS_TO_MODEL_ID[alias].value
+            for task, alias in ROUTING_TABLE.items()
+        }
 
 
 # Module-level singleton

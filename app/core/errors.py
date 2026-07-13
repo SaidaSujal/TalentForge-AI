@@ -21,7 +21,6 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
@@ -70,7 +69,9 @@ class NotFoundError(TalentForgeError):
 class ValidationFailedError(TalentForgeError):
     """Input validation failed at the business logic layer."""
 
-    def __init__(self, message: str, user_message: str = "Invalid input. Please check your data.") -> None:
+    def __init__(
+        self, message: str, user_message: str = "Invalid input. Please check your data."
+    ) -> None:
         super().__init__(
             message=message,
             user_message=user_message,
@@ -89,6 +90,70 @@ class DatabaseError(TalentForgeError):
         )
 
 
+class RecordAlreadyExistsError(DatabaseError):
+    """Raised when a unique constraint or primary key conflict occurs."""
+
+    def __init__(
+        self,
+        message: str = "Record already exists.",
+        orig_exc: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message)
+        self.user_message = "A record with these details already exists."
+        self.status_code = 409  # HTTP Conflict
+        self.orig_exc = orig_exc
+
+
+class ForeignKeyViolationError(DatabaseError):
+    """Raised when a foreign key relation check fails."""
+
+    def __init__(
+        self,
+        message: str = "Invalid reference key.",
+        orig_exc: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message)
+        self.user_message = "The referenced resource is invalid."
+        self.status_code = 400  # HTTP Bad Request
+        self.orig_exc = orig_exc
+
+
+class DatabaseConstraintError(DatabaseError):
+    """Raised when a check constraint fails in the database."""
+
+    def __init__(
+        self,
+        message: str = "Database constraint violation.",
+        orig_exc: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message)
+        self.user_message = "Provided values violate database constraint policies."
+        self.status_code = 400  # HTTP Bad Request
+        self.orig_exc = orig_exc
+
+
+class WriteProtectedError(DatabaseError):
+    """Raised when attempting to edit or delete append-only compliance logs."""
+
+    def __init__(self, message: str = "This resource is write-protected.") -> None:
+        super().__init__(message)
+        self.user_message = (
+            "This operation is not permitted. The record is write-protected."
+        )
+        self.status_code = 403  # HTTP Forbidden
+
+
+class ConcurrencyError(DatabaseError):
+    """Raised when a concurrent update conflict occurs."""
+
+    def __init__(self, message: str = "Resource modified by another request.") -> None:
+        super().__init__(message)
+        self.user_message = (
+            "The record was updated by another user. Please reload and try again."
+        )
+        self.status_code = 409  # HTTP Conflict
+
+
 class AIServiceError(TalentForgeError):
     """AI model call failed or returned an invalid response."""
 
@@ -103,7 +168,9 @@ class AIServiceError(TalentForgeError):
 class FileValidationError(TalentForgeError):
     """Uploaded file failed validation checks."""
 
-    def __init__(self, message: str, user_message: str = "File validation failed.") -> None:
+    def __init__(
+        self, message: str, user_message: str = "File validation failed."
+    ) -> None:
         super().__init__(
             message=message,
             user_message=user_message,
@@ -199,7 +266,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             401: "Authentication required.",
             403: "You do not have permission to access this resource.",
         }
-        user_msg = _safe_messages.get(exc.status_code, "An error occurred. Please try again.")
+        user_msg = _safe_messages.get(
+            exc.status_code, "An error occurred. Please try again."
+        )
         logger.warning(
             "HTTP exception",
             extra={

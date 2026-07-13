@@ -1,13 +1,13 @@
-import pytest
 import uuid
+
+import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import AsyncSessionLocal
-from app.db.models import Company, User
 from app.core.security import hash_password, verify_password
-
+from app.db.models import Company, User
+from app.db.session import AsyncSessionLocal
 
 
 @pytest.fixture(scope="module")
@@ -33,20 +33,22 @@ class TestUserModel:
     async def test_create_user_success(self, db_session: AsyncSession):
         """Verify that a User can be created successfully with correct fields."""
         # 1. Create a tenant company
-        company = Company(name="Test Tenant", slug=f"test-tenant-{uuid.uuid4().hex[:6]}")
+        company = Company(
+            name="Test Tenant", slug=f"test-tenant-{uuid.uuid4().hex[:6]}"
+        )
         db_session.add(company)
         await db_session.flush()
 
         # 2. Hash password and create user
         raw_password = "securepassword123"
         pwd_hash = hash_password(raw_password)
-        
+
         user = User(
             email=f"test-{uuid.uuid4().hex[:6]}@talentforge.ai",
             password_hash=pwd_hash,
             role="recruiter",
             company_id=company.id,
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         await db_session.flush()
@@ -96,7 +98,7 @@ class TestUserModel:
         await db_session.flush()
 
         shared_email = f"duplicate-{uuid.uuid4().hex[:6]}@talentforge.ai"
-        
+
         user1 = User(
             email=shared_email,
             password_hash=hash_password("pass"),
@@ -113,14 +115,14 @@ class TestUserModel:
             company_id=company.id,
         )
         db_session.add(user2)
-        
+
         with pytest.raises(IntegrityError):
             await db_session.flush()
 
     async def test_user_company_fk_requirement(self, db_session: AsyncSession):
         """Verify that creating a user without a valid company_id fails."""
         non_existent_company_id = uuid.uuid4()
-        
+
         user = User(
             email=f"invalid-{uuid.uuid4().hex[:6]}@talentforge.ai",
             password_hash=hash_password("pass"),
@@ -128,7 +130,7 @@ class TestUserModel:
             company_id=non_existent_company_id,
         )
         db_session.add(user)
-        
+
         with pytest.raises(IntegrityError):
             await db_session.flush()
 

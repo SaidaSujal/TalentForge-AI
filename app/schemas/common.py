@@ -9,7 +9,7 @@ These match the standard response format from AGENT.md §15:
 
 from __future__ import annotations
 
-from typing import Any, Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 

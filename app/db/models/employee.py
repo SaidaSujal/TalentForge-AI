@@ -11,14 +11,29 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Index, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.db.models.attrition_assessment import AttritionAssessment
     from app.db.models.company import Company
+    from app.db.models.learning_plan import LearningPlan
+    from app.db.models.onboarding_plan import OnboardingPlan
+    from app.db.models.performance_review import PerformanceReview
+    from app.db.models.retention_strategy import RetentionStrategy
+    from app.db.models.training_record import TrainingRecord
     from app.db.models.user import User
 
 
@@ -190,6 +205,32 @@ class Employee(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     subordinates: Mapped[list[Employee]] = relationship(
         "Employee",
         back_populates="manager",
+    )
+    onboarding_plan: Mapped[Optional[OnboardingPlan]] = relationship(
+        "OnboardingPlan", back_populates="employee", cascade="all, delete-orphan"
+    )
+    performance_reviews: Mapped[list[PerformanceReview]] = relationship(
+        "PerformanceReview",
+        foreign_keys="[PerformanceReview.employee_id]",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+    conducted_reviews: Mapped[list[PerformanceReview]] = relationship(
+        "PerformanceReview",
+        foreign_keys="[PerformanceReview.manager_id]",
+        back_populates="manager",
+    )
+    attrition_assessments: Mapped[list[AttritionAssessment]] = relationship(
+        "AttritionAssessment", back_populates="employee", cascade="all, delete-orphan"
+    )
+    retention_strategies: Mapped[list[RetentionStrategy]] = relationship(
+        "RetentionStrategy", back_populates="employee", cascade="all, delete-orphan"
+    )
+    learning_plans: Mapped[list[LearningPlan]] = relationship(
+        "LearningPlan", back_populates="employee", cascade="all, delete-orphan"
+    )
+    training_records: Mapped[list[TrainingRecord]] = relationship(
+        "TrainingRecord", back_populates="employee", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

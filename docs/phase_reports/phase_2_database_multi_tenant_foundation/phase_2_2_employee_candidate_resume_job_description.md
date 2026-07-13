@@ -1,108 +1,135 @@
-# Phase 2.2 Employee, Candidate, Resume, Job Description — Subphase Report
+# Project
+TalentForge AI
 
-**Status:** ✅ COMPLETED
+# Phase
+2 — Database & Multi-Tenant Foundation
 
----
+# Subphase
+2.2 — Employee, Candidate, Resume, Job Description
 
-## 1. Subphase Objectives
-The goal of Subphase 2.2 was to establish the database models and migrations for the core HR assets of the TalentForge AI application, ensuring strong multi-tenant isolation, data integrity, and strict separation of concerns.
+# Status
+✅ COMPLETED
 
-Key requirements included:
-- **Refactoring Foundation Models**: Moving existing models (`Company`, `User`, `AppSettings`) from a monolithic file (`models_foundation.py`) into a modular package structure under `app/db/models/`.
-- **Implementing Core HR Models**:
-  - **Employee**: Supports active/onboarding staff, self-referential managers, and sensitive salary deferred loading.
-  - **Candidate**: Manages applicant metadata, JSONB skills, check constraints, and AI scorecards.
-  - **Resume**: Holds uploaded file metadata and raw extracted text. Linked 1-to-1 with a candidate.
-  - **Job Description**: Manages generated JDs, skills, and social media/post variants.
-- **Alembic Migration**: Generating migration `0004_create_hr_foundation_tables.py` and verifying its full rollback and upgrade lifecycle.
-- **Validation**: Creating a robust pytest suite verifying relationships, constraints, enums, soft delete, and query behavior.
+# Date
+2026-07-07
 
----
+# Objective
+Implement the modular package architecture for DB models and establish database models/migrations for the core HR assets (Employee, Candidate, Resume, JobDescription).
 
-## 2. Technical Implementation Details
+# Overview
+This subphase refactors foundation models into individual modules and introduces the core HR entities with proper relationships, check constraints, composite indexes, and deferred loading mechanisms.
 
-### A. Modular Package Architecture (`app/db/models/`)
-The database models have been modularized under `app/db/models/` for scalability:
-- `__init__.py`: Exports all models to maintain Alembic autodiscovery.
-- `company.py`: `Company` model and its relationships to employees, candidates, resumes, and job descriptions.
-- `user.py`: `User` model, linking 1-to-1 with `Employee`.
-- `app_settings.py`: `AppSettings` model.
-- `employee.py`: `Employee` model, statuses (`EmployeeStatus`), work modes (`WorkMode`), and seniority (`ExperienceLevel`).
-- `candidate.py`: `Candidate` model, statuses (`CandidateStatus`), and AI assessment scores.
-- `resume.py`: `Resume` model, hash storage, and text contents.
-- `job_description.py`: `JobDescription` model and employment commitment types (`EmploymentType`).
+# Architecture Decisions
+- Package-based model organization under `app/db/models/` for code hygiene.
+- Sensitive employee `salary` uses deferred loading to avoid accidental exposures in basic queries.
+- Candidates `match_score` enforcements using database-level `CheckConstraint` between 0.00 and 100.00.
+- Unique email constraint on `Employee` is tenant-scoped (`company_id, email`).
+- Candidates to Resumes are linked in a strict 1-to-1 relationship.
+- Composite indexes are defined on all query pathways filtering on `company_id`.
 
-### B. High-Scale Indexing & Multi-Tenant Isolation
-To ensure high-performance tenant isolation (capable of scaling to millions of resumes and hundreds of thousands of employees), all queries are designed to filter by `company_id`. To support this, **composite indexes** have been implemented on the database tables:
-- `employees`:
-  - `ix_employees_company_status` on `(company_id, status)`
-  - `ix_employees_company_department` on `(company_id, department)`
-  - `ix_employees_company_role` on `(company_id, role)`
-  - `ix_employees_company_created_at` on `(company_id, created_at)`
-- `candidates`:
-  - `ix_candidates_company_status` on `(company_id, status)`
-  - `ix_candidates_company_email` on `(company_id, email)`
-  - `ix_candidates_company_created_at` on `(company_id, created_at)`
-- `resumes`:
-  - `ix_resumes_company_candidate` on `(company_id, candidate_id)` (Unique)
-  - `ix_resumes_company_hash` on `(company_id, resume_hash)`
-- `job_descriptions`:
-  - `ix_job_descriptions_company_title` on `(company_id, title)`
-  - `ix_job_descriptions_company_department` on `(company_id, department)`
-  - `ix_job_descriptions_company_jd_hash` on `(company_id, jd_hash)`
-  - `ix_job_descriptions_company_created_at` on `(company_id, created_at)`
+# Files Created
+### `app/db/models/employee.py`
+- **path:** [employee.py](file:///Users/sujal/TalentForge%20AI/app/db/models/employee.py)
+- **purpose:** Defines Employee model, enums (EmployeeStatus, WorkMode, ExperienceLevel), and self-referential supervisor relations.
+- **classes:** `Employee`, `EmployeeStatus`, `WorkMode`, `ExperienceLevel`
+- **methods:** None
 
-### C. Advanced Features & Security
-1. **Deferred Salary Loading**: The sensitive employee `salary` field uses `deferred` loading:
-   ```python
-   salary: Mapped[Optional[Decimal]] = deferred(mapped_column(Numeric(12, 2)))
-   ```
-   This prevents accidental exposure of salary data in general queries.
-2. **Audit Compatibility**: Tables include `created_by` and `updated_by` UUID fields (optional for V1) to track who created/modified each record.
-3. **Soft-Delete Lifecycle**: Logical delete is implemented via the `is_deleted` boolean column on all entities, ensuring records can be marked inactive without breaking database referential integrity.
-4. **Candidate Score Range Check Constraint**: Enforces that candidate `match_score` lies within `0.00` and `100.00`:
-   ```python
-   CheckConstraint("match_score >= 0.0 AND match_score <= 100.0", name="chk_candidates_match_score")
-   ```
+### `app/db/models/candidate.py`
+- **path:** [candidate.py](file:///Users/sujal/TalentForge%20AI/app/db/models/candidate.py)
+- **purpose:** Defines Candidate model, status enum (CandidateStatus), and score check constraints.
+- **classes:** `Candidate`, `CandidateStatus`
+- **methods:** None
 
----
+### `app/db/models/resume.py`
+- **path:** [resume.py](file:///Users/sujal/TalentForge%20AI/app/db/models/resume.py)
+- **purpose:** Defines Resume metadata model and text contents.
+- **classes:** `Resume`
+- **methods:** None
 
-## 3. Database Migration Lifecycle Validation
-The Alembic migration script was generated at `alembic/versions/0004_create_hr_foundation_tables.py`.
+### `app/db/models/job_description.py`
+- **path:** [job_description.py](file:///Users/sujal/TalentForge%20AI/app/db/models/job_description.py)
+- **purpose:** Defines JobDescription model, employment type enum (EmploymentType), and social post variants.
+- **classes:** `JobDescription`, `EmploymentType`
+- **methods:** None
 
-The migration lifecycle has been successfully verified:
-1. **Upgrade**: `alembic upgrade head` correctly creates tables, columns, indexes, check constraints, and custom Postgres ENUM types.
-2. **Downgrade**: `alembic downgrade 0003_create_users_table` rolls back all changes, dropping the tables, indexes, and custom types cleanly.
-3. **Upgrade (Re-apply)**: Successfully re-applies migrations to restore schema state.
+### `tests/test_phase2_2_hr_models.py`
+- **path:** [test_phase2_2_hr_models.py](file:///Users/sujal/TalentForge%20AI/tests/test_phase2_2_hr_models.py)
+- **purpose:** Verifies constraints, relationships, enums, soft delete, and query behavior for HR models.
+- **classes:** `TestHRModels`
+- **methods:** `test_create_employee_success`, `test_employee_manager_hierarchy`, `test_employee_user_relationship`, `test_employee_email_uniqueness_per_tenant`, `test_candidate_resume_one_to_one`, `test_candidate_match_score_check_constraint`, `test_job_description_jsonb_and_enums`, `test_employee_salary_deferred_loading`, `test_employee_soft_delete_lifecycle`, `test_tenant_isolation_employees`, `test_migration_lifecycle`
 
----
+### `alembic/versions/0004_create_hr_foundation_tables.py`
+- **path:** [0004_create_hr_foundation_tables.py](file:///Users/sujal/TalentForge%20AI/alembic/versions/0004_create_hr_foundation_tables.py)
+- **purpose:** Database schema migration script for Employee, Candidate, Resume, and JD tables.
+- **classes:** None
+- **methods:** `upgrade`, `downgrade`
 
-## 4. Verification and Test Results
-A robust suite of unit and integration tests was added in `tests/test_phase2_2_hr_models.py`.
+# Files Modified
+### `app/db/models/company.py`
+- **path:** [company.py](file:///Users/sujal/TalentForge%20AI/app/db/models/company.py)
+- **exact changes:** Moved from monolithic models file. Added relationships mapping to Employee, Candidate, Resume, and JobDescription models.
+- **why changes were required:** Modularize company definition and hook bidirectional relationship collections.
 
-The tests cover:
-- **Model Creation Success**: Verifies that Employee, Candidate, Resume, and JobDescription can be written and read with appropriate types and default enums.
-- **Self-referential Manager Hierarchy**: Verifies manager-subordinate connections and bidirectional lists.
-- **One-to-One Relationships**: Tests User-Employee and Candidate-Resume mappings.
-- **Candidate Match Score Limits**: Asserts that `IntegrityError` is raised if `match_score` is set above `100` or below `0`.
-- **Tenant-Scoped Unique Constraints**: Verifies that duplicate employee emails are allowed *across different companies*, but rejected *within the same company*.
-- **Deferred Loading**: Asserts that employee `salary` is in the unloaded state when the object is queried, and lazy-loads successfully on demand.
-- **Soft Delete and Tenant Isolation Queries**: Verifies logical delete flags and `company_id` filter separation.
-- **Programmatic Migration Verification**: Executes downgrade and upgrade commands programmatically to validate safety.
+### `app/db/models/user.py`
+- **path:** [user.py](file:///Users/sujal/TalentForge%20AI/app/db/models/user.py)
+- **exact changes:** Moved from monolithic models file. Added relationship to Employee.
+- **why changes were required:** Modularize user definition.
 
-### Test Output Summary
-All 46 test cases passed successfully in `3.23s`.
-```bash
-tests/test_phase2_2_hr_models.py::TestHRModels::test_create_employee_success PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_employee_manager_hierarchy PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_employee_user_relationship PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_employee_email_uniqueness_per_tenant PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_candidate_resume_one_to_one PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_candidate_match_score_check_constraint PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_job_description_jsonb_and_enums PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_employee_salary_deferred_loading PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_employee_soft_delete_lifecycle PASSED
-tests/test_phase2_2_hr_models.py::TestHRModels::test_tenant_isolation_employees PASSED
-tests/test_phase2_2_hr_models.py::test_migration_lifecycle PASSED
-======================== 46 passed, 1 warning in 3.23s =========================
-```
+### `app/db/models/__init__.py`
+- **path:** [__init__.py](file:///Users/sujal/TalentForge%20AI/app/db/models/__init__.py)
+- **exact changes:** Created package imports to export all models.
+- **why changes were required:** Maintain Alembic declarative meta autodiscovery.
+
+# Database Changes
+- Tables created: `employees`, `candidates`, `resumes`, `job_descriptions`
+- Custom Postgres ENUM types: `employee_status_enum`, `work_mode_enum`, `experience_level_enum`, `candidate_status_enum`, `employment_type_enum`
+- Check constraint: `chk_candidates_match_score` (`match_score >= 0.0 AND match_score <= 100.0`)
+- Unique indices on tenant isolation scopes.
+
+# Repository Changes
+None.
+
+# Seeder Changes
+None.
+
+# Testing
+- new tests: 11 tests in `test_phase2_2_hr_models.py`
+- previous tests: 7 tests (Phase 1 + Phase 2.1)
+- total tests: 18 tests (cumulative)
+- validation commands:
+  ```bash
+  PYTHONPATH=. .venv/bin/pytest tests/test_phase2_2_hr_models.py -v
+  ```
+
+# Validation Results
+All tests passed:
+- `TestHRModels.test_create_employee_success` PASSED
+- `TestHRModels.test_employee_manager_hierarchy` PASSED
+- `TestHRModels.test_employee_user_relationship` PASSED
+- `TestHRModels.test_employee_email_uniqueness_per_tenant` PASSED
+- `TestHRModels.test_candidate_resume_one_to_one` PASSED
+- `TestHRModels.test_candidate_match_score_check_constraint` PASSED
+- `TestHRModels.test_job_description_jsonb_and_enums` PASSED
+- `TestHRModels.test_employee_salary_deferred_loading` PASSED
+- `TestHRModels.test_employee_soft_delete_lifecycle` PASSED
+- `TestHRModels.test_tenant_isolation_employees` PASSED
+- `test_migration_lifecycle` PASSED
+
+# Security Validation
+- Verified that sensitive salary column uses `deferred` loading.
+- Soft-delete flag validates record preservation without physical row deletion.
+
+# Tenant Isolation Validation
+- Composite indexes verified to partition employees, candidates, and job descriptions safely on `company_id`.
+- Verified that employee email uniqueness is scoped per tenant.
+
+# Performance Notes
+- Composite indexes established on `(company_id, status)`, `(company_id, department)`, and `(company_id, role)` to speed up tenant-scoped queries.
+
+# Remaining Limitations
+- None.
+
+# Deliverables
+- Modular files for Employee, Candidate, Resume, and JobDescription models.
+- Database migration script `0004_create_hr_foundation_tables.py`
+- Unit tests in `test_phase2_2_hr_models.py`

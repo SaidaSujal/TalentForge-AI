@@ -11,11 +11,9 @@ Usage:
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from typing import List
 
-from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -85,7 +83,11 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> List[str]:
         """Parse the comma-separated ALLOWED_ORIGINS string into a list."""
-        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        return [
+            origin.strip()
+            for origin in self.allowed_origins.split(",")
+            if origin.strip()
+        ]
 
     @property
     def max_upload_size_bytes(self) -> int:

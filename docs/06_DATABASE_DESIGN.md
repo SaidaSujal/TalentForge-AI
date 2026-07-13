@@ -157,11 +157,479 @@ Represents generated or managed JD profiles, location data, requirements, and al
 
 ---
 
+### 5. Policy Documents Table (`policy_documents`)
+Represents uploaded HR policy metadata (Employee Handbook, Travel Guidelines, etc.). Binaries are processed and deleted, storing only text metadata and SHA-256 hashes for duplication detection.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `name` | VARCHAR(255) | No | Display name of the document |
+| `description` | VARCHAR(500) | Yes | Brief summary of document contents |
+| `category` | VARCHAR(100) | No | Document category classification (e.g. Compliance, Benefits) |
+| `status` | ENUM | No | `policy_document_status_enum` (uploaded, indexed, failed, archived) |
+| `file_name` | VARCHAR(255) | No | Original uploaded filename |
+| `file_path` | VARCHAR(500) | Yes | Temporary file path reference, cleared post-parsing |
+| `file_size` | INTEGER | No | Size in bytes |
+| `mime_type` | VARCHAR(100) | No | MIME type classification |
+| `document_hash` | VARCHAR(64) | No | SHA-256 hash of document binary content |
+| `chunk_count` | INTEGER | No | Total number of chunks generated, default 0 |
+| `indexed_at` | TIMESTAMPTZ | Yes | Timestamp when document chunks were successfully embedded |
+| `error_message` | TEXT | Yes | Details of parsing/indexing failures |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `false`) |
+| `created_by` | UUID | Yes | Audit field (creating user ID) |
+| `updated_by` | UUID | Yes | Audit field (last updating user ID) |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Composite Index**: `ix_policy_documents_company_hash` on `(company_id, document_hash)` to detect duplicate uploads.
+- **Partial Unique Index**: `uq_policy_documents_active_name` on `(company_id, name)` where `is_deleted = false` (prevents active documents with duplicate names).
+- **Partial Unique Index**: `uq_policy_documents_active_hash` on `(company_id, document_hash)` where `is_deleted = false` (prevents active duplicates of the exact same document contents).
+
+---
+
+### 6. Policy Chunks Table (`policy_chunks`)
+Stores parsed semantic text segments and their high-dimensional vector embeddings for RAG chatbot retrieval.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `document_id` | UUID | No | Foreign Key to `policy_documents.id` (CASCADE) |
+| `chunk_index` | INTEGER | No | 0-indexed position order of the chunk in the document |
+| `section_title` | VARCHAR(150) | Yes | Section header / title where chunk belongs |
+| `page_number` | INTEGER | Yes | Origin page number reference for citations |
+| `token_count` | INTEGER | Yes | Approximation of chunk token length |
+| `content` | TEXT | No | Clean text contents of this chunk |
+| `embedding` | Vector(1024) | No | 1024-dimension float vector (NVIDIA embeddings) |
+| `metadata_json` | JSONB | Yes | Chunk metadata (e.g. parent section context), default `{}` |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `false`) |
+| `created_by` | UUID | Yes | Audit field (creating user ID) |
+| `updated_by` | UUID | Yes | Audit field (last updating user ID) |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Unique Constraint**: `uq_policy_chunks_index` on `(company_id, document_id, chunk_index)` to prevent duplicate chunk index mappings.
+- **Composite Index**: `ix_policy_chunks_company_document` on `(company_id, document_id)` to optimize cleanups.
+- **Vector Index**: Approximate Nearest Neighbor (ANN) index on the `embedding` vector column using HNSW with Cosine Distance (`vector_cosine_ops`). Fallback to IVFFlat index or sequential search if pgvector version < 0.5.0 in local/testing environments.
+
+---
+
+## Workflow Schema (Phase 2.4)
+
+### 1. Onboarding Plans Table (`onboarding_plans`)
+Represents the roadmap, milestones, and status of employee onboarding cycles.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `employee_id` | UUID | No | Foreign Key to `employees.id` (CASCADE) |
+| `status` | ENUM | No | `onboarding_status_enum` (pending, in_progress, on_track, behind, complete) |
+| `progress_percent` | NUMERIC(5, 2) | No | Onboarding completion percentage (default `0.00`) |
+| `welcome_email_text` | TEXT | Yes | AI draft of custom welcome email |
+| `team_announcement_text` | TEXT | Yes | AI draft of welcome announcement |
+| `plan_data_json` | JSONB | Yes | Milestones and roadmap structures |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraint**: `chk_onboarding_plans_progress` restricts `progress_percent >= 0.00 AND progress_percent <= 100.00`
+- **Partial Unique Index**: `uq_onboarding_plans_active_employee` on `(company_id, employee_id)` where `is_deleted = false` (enforces single active plan per employee)
+- **Composite Indexes**:
+  - `ix_onboarding_plans_company_status` on `(company_id, status)`
+  - `ix_onboarding_plans_company_created` on `(company_id, created_at)`
+
+---
+
+### 2. Onboarding Tasks Table (`onboarding_tasks`)
+Individual onboarding tasks / activities linked to a plan.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `plan_id` | UUID | No | Foreign Key to `onboarding_plans.id` (CASCADE) |
+| `title` | VARCHAR(255) | No | Task summary title |
+| `description` | VARCHAR(500) | Yes | Details description |
+| `category` | ENUM | No | `onboarding_task_category_enum` (schedule, task, goal, document, tool, meeting) |
+| `status` | ENUM | No | `task_status_enum` (pending, in_progress, completed) |
+| `due_date` | DATE | Yes | Task deadline date |
+| `completed_at` | TIMESTAMPTZ | Yes | Completion timestamp |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Composite Indexes**:
+  - `ix_onboarding_tasks_company_plan` on `(company_id, plan_id)`
+  - `ix_onboarding_tasks_company_status` on `(company_id, status)`
+  - `ix_onboarding_tasks_company_created` on `(company_id, created_at)`
+
+---
+
+### 3. Performance Reviews Table (`performance_reviews`)
+Manager evaluations, goals tracking, salary revisions, and AI drafts.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `employee_id` | UUID | No | Foreign Key to `employees.id` (CASCADE) |
+| `manager_id` | UUID | Yes | Foreign Key to `employees.id` (SET NULL) |
+| `review_period` | VARCHAR(100) | No | Review cycle identifier (e.g. Q1 2026) |
+| `status` | ENUM | No | `review_status_enum` (draft, under_review, completed, archived) |
+| `goals_achieved` | INTEGER | No | Achieved goals count |
+| `total_goals` | INTEGER | No | Total assigned goals |
+| `attendance_percent` | NUMERIC(5, 2) | Yes | Attendance score percentage |
+| `manager_observations` | TEXT | Yes | Manual manager assessment |
+| `peer_feedback` | TEXT | Yes | Peer comments summary |
+| `review_summary` | TEXT | Yes | AI-generated summary draft |
+| `rating_suggestion` | VARCHAR(100) | Yes | AI rating prediction draft |
+| `key_achievements` | JSONB | Yes | Structured goals / achievements metadata |
+| `development_areas` | JSONB | Yes | Development opportunities |
+| `bias_check_notes` | TEXT | Yes | AI linguistic bias warnings |
+| `promotion_readiness` | BOOLEAN | No | Fit for role upgrade flag (default `False`) |
+| `salary_revision_label` | VARCHAR(100) | Yes | Compensation revision recommendation draft |
+| `smart_goals` | JSONB | Yes | Next cycle SMART goals |
+| `development_plan` | TEXT | Yes | Career pathways roadmap |
+| `pip_details` | JSONB | Yes | Performance Improvement Plan metadata |
+| `signed_off_at` | TIMESTAMPTZ | Yes | Digital sign-off timestamp |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `version_number` | INTEGER | Yes | Incremental revision number (default `1`) |
+| `previous_version_id` | UUID | Yes | Self-referential FK to `performance_reviews.id` (SET NULL) |
+| `human_review_required` | BOOLEAN | No | Human loop audit flag (default `True`) |
+| `reviewed_by` | UUID | Yes | Auditor User ID FK to `users.id` (SET NULL) |
+| `reviewed_at` | TIMESTAMPTZ | Yes | Audit approval timestamp |
+| `approval_status` | ENUM | No | `approval_status_enum` (pending, approved, rejected) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraints**:
+  - `chk_performance_reviews_goals`: `goals_achieved >= 0 AND total_goals >= 0 AND goals_achieved <= total_goals`
+  - `chk_performance_reviews_attendance`: `attendance_percent >= 0.00 AND attendance_percent <= 100.00`
+- **Composite Indexes**:
+  - `ix_performance_reviews_company_employee` on `(company_id, employee_id)`
+  - `ix_performance_reviews_company_manager` on `(company_id, manager_id)`
+  - `ix_performance_reviews_company_status` on `(company_id, status)`
+  - `ix_performance_reviews_company_created` on `(company_id, created_at)`
+
+---
+
+### 4. Attrition Assessments Table (`attrition_assessments`)
+Analyzes employee risk scoring, explainable SHAP weights, stay interview drafts, and costs.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `employee_id` | UUID | No | Foreign Key to `employees.id` (CASCADE) |
+| `risk_score` | NUMERIC(5, 2) | No | Attrition risk percentage (0.00 - 100.00) |
+| `risk_level` | ENUM | No | `risk_level_enum` (low, medium, high, critical) |
+| `risk_factors` | JSONB | Yes | SHAP explanation values (local ML feature weights) |
+| `stay_interview_questions` | JSONB | Yes | AI stay interview questions draft |
+| `replacement_cost` | NUMERIC(12, 2) | Yes | Estimated replacement cost |
+| `manager_satisfaction_score` | NUMERIC(3, 1) | Yes | Manager rating score on a 1.0 - 5.0 scale |
+| `overtime_hours` | NUMERIC(5, 1) | Yes | Average monthly overtime hours |
+| `is_active_assessment` | BOOLEAN | No | Active record cycle flag (default `True`) |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `human_review_required` | BOOLEAN | No | Human loop audit flag (default `True`) |
+| `reviewed_by` | UUID | Yes | Auditor User ID FK to `users.id` (SET NULL) |
+| `reviewed_at` | TIMESTAMPTZ | Yes | Audit approval timestamp |
+| `approval_status` | ENUM | No | `approval_status_enum` (pending, approved, rejected) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraints**:
+  - `chk_attrition_assessments_risk`: `risk_score >= 0.00 AND risk_score <= 100.00`
+  - `chk_attrition_assessments_satisfaction`: `manager_satisfaction_score >= 0.0 AND manager_satisfaction_score <= 5.0`
+- **Composite Indexes**:
+  - `ix_attrition_assessments_company_employee` on `(company_id, employee_id)`
+  - `ix_attrition_assessments_company_risk` on `(company_id, risk_level)`
+  - `ix_attrition_assessments_company_created` on `(company_id, created_at)`
+
+---
+
+### 5. Retention Strategies Table (`retention_strategies`)
+AI suggestions and HR action plans for retaining high-risk employees.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `assessment_id` | UUID | No | Foreign Key to `attrition_assessments.id` (CASCADE), Unique |
+| `employee_id` | UUID | No | Foreign Key to `employees.id` (CASCADE) |
+| `recommendations` | JSONB | No | Suggested benefits/compensation/career plan draft |
+| `action_plan` | TEXT | Yes | HR execution roadmap plan |
+| `status` | ENUM | No | `retention_strategy_status_enum` (proposed, approved, rejected, implemented) |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `version_number` | INTEGER | Yes | Version counter (default `1`) |
+| `previous_version_id` | UUID | Yes | Self-referential FK to `retention_strategies.id` (SET NULL) |
+| `human_review_required` | BOOLEAN | No | Human loop audit flag (default `True`) |
+| `reviewed_by` | UUID | Yes | Auditor User ID FK to `users.id` (SET NULL) |
+| `reviewed_at` | TIMESTAMPTZ | Yes | Audit approval timestamp |
+| `approval_status` | ENUM | No | `approval_status_enum` (pending, approved, rejected) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Composite Indexes**:
+  - `ix_retention_strategies_company_employee` on `(company_id, employee_id)`
+  - `ix_retention_strategies_company_status` on `(company_id, status)`
+  - `ix_retention_strategies_company_created` on `(company_id, created_at)`
+
+---
+
+### 6. Learning Plans Table (`learning_plans`)
+Career pathing, skill gaps, and custom AI learning pathways.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `employee_id` | UUID | No | Foreign Key to `employees.id` (CASCADE) |
+| `current_role` | VARCHAR(150) | No | Current designation |
+| `target_role` | VARCHAR(150) | No | Goal target designation |
+| `readiness_score` | NUMERIC(5, 2) | No | Readiness analysis rating percentage |
+| `skill_gap_analysis` | JSONB | No | Structured required vs missing skills |
+| `learning_path_json` | JSONB | No | Milestone timeline courses and certifications |
+| `estimated_roi` | VARCHAR(255) | Yes | Expected business ROI metrics text |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `version_number` | INTEGER | Yes | Version counter (default `1`) |
+| `previous_version_id` | UUID | Yes | Self-referential FK to `learning_plans.id` (SET NULL) |
+| `human_review_required` | BOOLEAN | No | Human loop audit flag (default `True`) |
+| `reviewed_by` | UUID | Yes | Auditor User ID FK to `users.id` (SET NULL) |
+| `reviewed_at` | TIMESTAMPTZ | Yes | Audit approval timestamp |
+| `approval_status` | ENUM | No | `approval_status_enum` (pending, approved, rejected) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraint**: `chk_learning_plans_readiness` restricts `readiness_score >= 0.00 AND readiness_score <= 100.00`
+- **Composite Indexes**:
+  - `ix_learning_plans_company_employee` on `(company_id, employee_id)`
+  - `ix_learning_plans_company_created` on `(company_id, created_at)`
+
+---
+
+### 7. Training Records Table (`training_records`)
+Tracks course completion progress, costs, certificates, and dates.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `employee_id` | UUID | No | Foreign Key to `employees.id` (CASCADE) |
+| `plan_id` | UUID | Yes | Foreign Key to `learning_plans.id` (SET NULL) |
+| `course_name` | VARCHAR(255) | No | Target course display name |
+| `provider` | VARCHAR(255) | Yes | Course provider host (e.g. Coursera) |
+| `skill_targeted` | VARCHAR(100) | No | Targeted competence skill |
+| `status` | ENUM | No | `training_status_enum` (not_started, in_progress, completed, expired) |
+| `progress_percent` | NUMERIC(5, 2) | No | Progress percentage (default `0.00`) |
+| `cost` | NUMERIC(10, 2) | No | Enrolled course cost (default `0.00`) |
+| `started_at` | DATE | Yes | Training start date |
+| `completed_at` | DATE | Yes | Training completion date |
+| `certificate_url` | VARCHAR(500) | Yes | External credential link |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraints**:
+  - `chk_training_records_progress`: `progress_percent >= 0.00 AND progress_percent <= 100.00`
+  - `chk_training_records_cost`: `cost >= 0.00`
+- **Composite Indexes**:
+  - `ix_training_records_company_employee` on `(company_id, employee_id)`
+  - `ix_training_records_company_plan` on `(company_id, plan_id)`
+  - `ix_training_records_company_status` on `(company_id, status)`
+  - `ix_training_records_company_created` on `(company_id, created_at)`
+
+---
+
+### 8. Interview Kits Table (`interview_kits`)
+Questions banks, structure timings, seniority levels, and rubrics for hiring evaluations.
+
+| Column | Type | Nullable | Description / Constraint |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Foreign Key to `companies.id` (CASCADE) |
+| `job_role` | VARCHAR(150) | No | Job role classification (e.g. Frontend Dev) |
+| `department` | VARCHAR(100) | No | Department category |
+| `experience_level` | ENUM | No | Experience level from existing `experience_level_enum` (JUNIOR, MID, SENIOR, LEAD, DIRECTOR) |
+| `duration_minutes` | INTEGER | No | Interview target length in minutes |
+| `key_skills` | JSONB | No | Measured skills list |
+| `interview_structure` | JSONB | Yes | Time distribution sections layout |
+| `question_bank` | JSONB | No | Array of questions, prompt answers, weight values |
+| `evaluation_rubric` | JSONB | Yes | Score parameters and descriptors |
+| `panel_guide` | TEXT | Yes | AI draft guidelines for evaluators |
+| `is_template` | BOOLEAN | No | Reusable blueprint flag (default `False`) |
+| `is_deleted` | BOOLEAN | No | Soft-delete flag (default `False`) |
+| `version_number` | INTEGER | Yes | Version counter (default `1`) |
+| `previous_version_id` | UUID | Yes | Self-referential FK to `interview_kits.id` (SET NULL) |
+| `human_review_required` | BOOLEAN | No | Human loop audit flag (default `True`) |
+| `reviewed_by` | UUID | Yes | Auditor User ID FK to `users.id` (SET NULL) |
+| `reviewed_at` | TIMESTAMPTZ | Yes | Audit approval timestamp |
+| `approval_status` | ENUM | No | `approval_status_enum` (pending, approved, rejected) |
+| `created_by` | UUID | Yes | Creating user ID |
+| `updated_by` | UUID | Yes | Last updating user ID |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraint**: `chk_interview_kits_duration` restricts `duration_minutes > 0`
+- **Composite Indexes**:
+  - `ix_interview_kits_company_role_level` on `(company_id, job_role, experience_level)`
+  - `ix_interview_kits_company_department` on `(company_id, department)`
+  - `ix_interview_kits_company_created` on `(company_id, created_at)`
+
+
+---
+
+## AI & System Schema (Phase 2.5)
+
+### 1. AI Response Cache Table (`ai_responses_cache`)
+Caches deterministic LLM prompt answers to avoid duplicate API calls and lower query latencies.
+
+| Column | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Tenant identifier (FK to `companies.id`, CASCADE) |
+| `cache_key` | VARCHAR(64) | No | SHA-256 hash of normalized inputs |
+| `prompt_hash` | VARCHAR(64) | No | SHA-256 hash of prompt template |
+| `task_type` | VARCHAR(50) | No | Routing task alias |
+| `provider` | VARCHAR(50) | No | Model provider key |
+| `model_used` | VARCHAR(100) | No | Resolved model string |
+| `response_text` | TEXT | No | Cached LLM generated answer |
+| `token_count` | INTEGER | Yes | Output tokens count |
+| `expires_at` | TIMESTAMPTZ | No | Cache TTL expiration timestamp |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Unique Constraint**: `uq_ai_responses_cache_key` on `(company_id, cache_key)` (tenant-scoped cache key uniqueness)
+- **Check Constraint**: `chk_ai_cache_tokens` checking `token_count >= 0`
+- **Composite Index**: `ix_ai_responses_cache_company_expires` on `(company_id, expires_at)`
+
+### 2. AI Invocation Histories Table (`ai_invocation_histories`)
+Tracks every LLM API transaction, prompt hashes, costs, latencies, and token counts.
+
+| Column | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Tenant identifier (FK to `companies.id`, CASCADE) |
+| `user_id` | UUID | Yes | Requesting user ID (FK to `users.id`, SET NULL) |
+| `request_id` | VARCHAR(100) | Yes | Correlation ID mapping the request lifecycle |
+| `module` | VARCHAR(50) | No | Source system module |
+| `task_type` | VARCHAR(50) | No | Resolved task alias |
+| `provider` | VARCHAR(50) | No | Target API provider |
+| `model_used` | VARCHAR(100) | No | Exact model string used |
+| `prompt_template_name` | VARCHAR(100) | No | Prompt template registry key |
+| `prompt_hash` | VARCHAR(64) | No | SHA-256 hash of compiled prompt text |
+| `input_summary` | VARCHAR(255) | No | Redacted summary of parameters for privacy |
+| `input_metadata_json` | JSONB | Yes | Redacted operational metadata parameters |
+| `response_text` | TEXT | No | Raw complete LLM response text |
+| `prompt_tokens` | INTEGER | No | Input prompt tokens count |
+| `completion_tokens` | INTEGER | No | Output completion tokens count |
+| `total_tokens` | INTEGER | No | Total sum of token counts |
+| `latency_ms` | INTEGER | Yes | LLM call duration in milliseconds |
+| `estimated_cost` | NUMERIC(10, 6) | No | Financial cost of invocation |
+| `cache_hit` | BOOLEAN | No | True if resolved from `AICache` |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraints**:
+  - `chk_ai_invocation_tokens_positive` enforces non-negative token counts
+  - `chk_ai_invocation_cost_positive` enforces `estimated_cost >= 0.00`
+  - `chk_ai_invocation_latency` enforces non-negative execution latency
+  - `chk_ai_invocation_tokens_total` checks `total_tokens = prompt_tokens + completion_tokens`
+- **Composite Indexes**:
+  - `ix_ai_invocation_company_task_created` on `(company_id, task_type, created_at)`
+  - `ix_ai_invocation_company_user` on `(company_id, user_id)`
+  - `ix_ai_invocation_company_cache_hit` on `(company_id, cache_hit)`
+
+### 3. Audit Logs Table (`audit_logs`)
+Append-only log recording all compliance events, secure exports, and user mutations.
+
+| Column | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Tenant identifier (FK to `companies.id`, CASCADE) |
+| `user_id` | UUID | Yes | Performing user ID (FK to `users.id`, SET NULL) |
+| `module` | VARCHAR(50) | No | Audited system module |
+| `action` | VARCHAR(100) | No | Triggered action tag |
+| `entity_type` | VARCHAR(50) | Yes | Targeted database table name |
+| `entity_id` | VARCHAR(100) | Yes | Target row identifier |
+| `metadata_json` | JSONB | Yes | Redacted metadata containing diff parameters |
+| `ip_address` | VARCHAR(45) | Yes | IPv4 or IPv6 client IP address |
+| `user_agent` | VARCHAR(255) | Yes | Client browser user agent |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Composite Indexes**:
+  - `ix_audit_logs_company_action_created` on `(company_id, action, created_at)`
+  - `ix_audit_logs_company_entity` on `(company_id, entity_type, entity_id)`
+
+### 4. Export Jobs Table (`export_jobs`)
+Tracks asynchronous file downloads and reports generated by tenant users.
+
+| Column | Type | Nullable | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | No | Primary Key |
+| `company_id` | UUID | No | Tenant identifier (FK to `companies.id`, CASCADE) |
+| `user_id` | UUID | Yes | Requesting user ID (FK to `users.id`, SET NULL) |
+| `module_scope` | VARCHAR(50) | No | Feature scope of report |
+| `export_type` | ENUM | No | `export_type_enum` (pdf, csv, excel, docx, txt) |
+| `status` | ENUM | No | `export_status_enum` (pending, processing, completed, failed) |
+| `file_name` | VARCHAR(255) | No | Sanitized file name generated server-side |
+| `file_size_bytes` | INTEGER | Yes | Report file size in bytes |
+| `storage_path` | VARCHAR(500) | Yes | Secure path to report storage system |
+| `download_count` | INTEGER | No | Downloads frequency counter |
+| `error_message` | VARCHAR(500) | Yes | Sanitized user-facing error message |
+| `expires_at` | TIMESTAMPTZ | Yes | Time TTL after which file is purged |
+| `is_deleted` | BOOLEAN | No | Soft-delete logically excluded status |
+| `created_at` | TIMESTAMPTZ | No | Server default `now()` |
+| `updated_at` | TIMESTAMPTZ | No | Server default `now()` |
+
+#### Constraints & Indexes
+- **Check Constraints**:
+  - `chk_export_jobs_size` restricts `file_size_bytes >= 0`
+  - `chk_export_jobs_downloads` restricts `download_count >= 0`
+- **Composite Indexes**:
+  - `ix_export_jobs_company_status` on `(company_id, status)`
+  - `ix_export_jobs_company_created` on `(company_id, created_at)`
+
+---
+
+
 ## Vector Storage
-- Use pgvector extension for chatbot knowledge bases.
-- Table `policy_chunks` stores document split chunks, vector embeddings, and links back to `policy_documents`.
+- PostgreSQL `pgvector` extension is used to host semantic embeddings.
+- Vector dimension is set to **`1024`** to support NVIDIA embedding outputs (`nvidia/nv-embed-v1`).
+- Similarity searches utilize cosine distance (`<=>` operator) and are scoped strictly using `company_id` as the primary prefix parameter.
 
 ## Security Rules
 - **Passwords**: Raw passwords must never be stored. Store password hashes using bcrypt.
 - **Salary Loading**: Confidential salaries use SQLAlchemy `deferred` lazy loading to ensure they are omitted from general queries unless explicitly requested.
 - **Tenant Isolation**: Query isolates data using composite indexes prefixed with `company_id`.
+- **Policy Storage**: Uploaded binary documents must not be permanently stored in filesystem or DB. Text content is extracted, parsed, chunked, and stored, and the binary is deleted after processing.
+- **LLM Prompt Protection**: Full policy documents are never sent directly to the LLM. Only matching semantic chunks matching the user query context are retrieved and fed to the LLM.

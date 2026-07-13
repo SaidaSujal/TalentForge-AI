@@ -41,7 +41,6 @@ from app.core.rate_limiter import limiter
 from app.core.security import SecurityHeadersMiddleware, get_cors_kwargs
 from app.routes import health as health_router
 
-
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 
 

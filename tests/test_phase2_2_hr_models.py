@@ -1,16 +1,17 @@
-import pytest
-import uuid
 import subprocess
+import uuid
 from decimal import Decimal
+
+import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import AsyncSessionLocal
-from app.db.models import Company, User, Employee, Candidate, Resume, JobDescription
-from app.db.models.employee import EmployeeStatus, WorkMode, ExperienceLevel
+from app.db.models import Candidate, Company, Employee, JobDescription, Resume, User
 from app.db.models.candidate import CandidateStatus
+from app.db.models.employee import EmployeeStatus, ExperienceLevel, WorkMode
 from app.db.models.job_description import EmploymentType
+from app.db.session import AsyncSessionLocal
 
 
 @pytest.fixture(scope="module")
@@ -234,7 +235,9 @@ class TestHRModels:
         res = await db_session.execute(q)
         assert res.scalar_one_or_none() is None
 
-    async def test_candidate_match_score_check_constraint(self, db_session: AsyncSession):
+    async def test_candidate_match_score_check_constraint(
+        self, db_session: AsyncSession
+    ):
         """Verify database check constraint on match_score bounds."""
         company = Company(name="Score Tenant", slug=f"score-{uuid.uuid4().hex[:6]}")
         db_session.add(company)
@@ -281,7 +284,10 @@ class TestHRModels:
             required_skills=["Python", "System Design", "PostgreSQL"],
             preferred_skills=["Docker", "FastAPI"],
             job_description_text="# Senior Python Architect Job Description...",
-            responsibilities=["Lead team of 5", "Design scalable multi-tenant DB schemas"],
+            responsibilities=[
+                "Lead team of 5",
+                "Design scalable multi-tenant DB schemas",
+            ],
             requirements=["5+ years experience", "Strong communication skills"],
             benefits=["Full remote work", "Competitive stock options"],
             ats_keywords=["Python", "Architect", "Multi-tenant"],
@@ -336,14 +342,15 @@ class TestHRModels:
         assert db_emp is not None
         # In SQLAlchemy, we inspect the loaded state to verify salary is deferred
         state = db_emp._sa_instance_state
-        assert "salary" in state.unloaded  # salary should be in the unloaded/deferred set
+        assert (
+            "salary" in state.unloaded
+        )  # salary should be in the unloaded/deferred set
 
         # Trigger lazy load asynchronously via refresh
         await db_session.refresh(db_emp, ["salary"])
         sal_value = db_emp.salary
         assert sal_value == Decimal("95000.00")
         assert "salary" not in state.unloaded
-
 
     async def test_employee_soft_delete_lifecycle(self, db_session: AsyncSession):
         """Verify soft-delete logical lifecycle exclusion."""
@@ -421,9 +428,17 @@ class TestHRModels:
 def test_migration_lifecycle():
     """Verify Alembic migration upgrade -> downgrade -> upgrade works."""
     import sys
+
     from app.core.config import settings
+
     # 1. Downgrade to 0003_create_users_table
-    downgrade_cmd = [sys.executable, "-m", "alembic", "downgrade", "0003_create_users_table"]
+    downgrade_cmd = [
+        sys.executable,
+        "-m",
+        "alembic",
+        "downgrade",
+        "0003_create_users_table",
+    ]
     env = {
         **os_env_override(),
         "PYTHONPATH": ".",
@@ -439,9 +454,8 @@ def test_migration_lifecycle():
     assert res_up.returncode == 0, f"Upgrade failed: {res_up.stderr}"
 
 
-
-
 def os_env_override():
     import os
+
     env = os.environ.copy()
     return env
